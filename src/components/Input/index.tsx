@@ -1,5 +1,13 @@
-import React from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+} from "react";
 import { TextInputProps } from "react-native";
+import { useField } from "@unform/core";
 
 import { Container, TextInput, Icon } from "./styles";
 
@@ -8,15 +16,58 @@ interface InputProps extends TextInputProps {
   icon: string;
 }
 
-const Input: React.FC<InputProps> = ({ name, icon, ...rest }) => (
-  <Container>
-    <Icon name={icon} size={20} color="#666360" />
-    <TextInput
-      {...rest}
-      placeholderTextColor="#666360"
-      keyboardAppearance="dark"
-    />
-  </Container>
-);
+interface InputValueReference {
+  value: string;
+}
+interface InputRef {
+  focus(): void;
+}
 
-export default Input;
+const Input: React.ForwardRefRenderFunction<InputRef, InputProps> = (
+  { name, icon, ...rest },
+  ref
+) => {
+  const inputElementRef = useRef<any>(null);
+
+  const { registerField, fieldName, defaultValue = "", error } = useField(name);
+  const inputValueRef = useRef<InputValueReference>({ value: defaultValue });
+
+  useImperativeHandle(ref, () => ({
+    focus() {
+      inputElementRef.current.focus();
+    },
+  }));
+
+  useEffect(() => {
+    registerField<string>({
+      name: fieldName,
+      ref: inputValueRef.current,
+      path: "value",
+      setValue(ref: any, value) {
+        inputValueRef.current.value = value;
+        inputElementRef.current.setNativeProps({ text: value });
+      },
+      clearValue() {
+        inputValueRef.current.value = "";
+        inputElementRef.current.clear();
+      },
+    });
+  }, [registerField, fieldName]);
+
+  return (
+    <Container>
+      <Icon name={icon} size={20} color="#666360" />
+      <TextInput
+        ref={inputElementRef}
+        {...rest}
+        placeholderTextColor="#666360"
+        keyboardAppearance="dark"
+        onChangeText={(value) => {
+          inputValueRef.current.value = value;
+        }}
+      />
+    </Container>
+  );
+};
+
+export default forwardRef(Input);
