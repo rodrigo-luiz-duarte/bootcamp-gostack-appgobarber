@@ -6,6 +6,7 @@ import {
   View,
   ScrollView,
   TextInput,
+  Alert,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import { useNavigation } from "@react-navigation/native";
@@ -14,6 +15,10 @@ import * as Yup from "yup";
 
 import { Form } from "@unform/mobile";
 import { FormHandles } from "@unform/core";
+
+import api from "../../services/api";
+
+import getValidationErrors from "../../utils/getValidationErros";
 
 import Input from "../../components/Input";
 import Button from "../../components/Button";
@@ -27,16 +32,62 @@ import {
   BackToSignInButton,
 } from "./styles";
 
+interface SignUpFormData {
+  name: string;
+  email: string;
+  password: string;
+}
+
 const SignUp: React.FC = () => {
   const formRef = useRef<FormHandles>(null);
 
+  const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
 
   const navigation = useNavigation();
 
-  const handleSignUp = useCallback((data: object) => {
-    console.log(data);
-  }, []);
+  const handleSignUp = useCallback(
+    async (data: SignUpFormData) => {
+      try {
+        formRef.current?.setErrors({});
+
+        const schema = Yup.object().shape({
+          name: Yup.string().required("Nome obrigatório"),
+          email: Yup.string()
+            .required("E-mail obrigatório")
+            .email("Informe um e-mail válido"),
+          password: Yup.string()
+            .required("Senha obrigatória")
+            .min(6, "Senha deve conter pelo menos 6 caracteres"),
+        });
+
+        await schema.validate(data, {
+          abortEarly: false,
+        });
+
+        await api.post("/users", data);
+
+        Alert.alert(
+          "Cadastro realizado com sucesso!",
+          "Você já pode efetuar login na aplicação."
+        );
+
+        navigation.goBack();
+      } catch (error) {
+        if (error instanceof Yup.ValidationError) {
+          const errors = getValidationErrors(error);
+          formRef.current?.setErrors(errors);
+          return;
+        }
+
+        Alert.alert(
+          "Erro no cadastramento",
+          "Ocorreu um erro no cadastro, tente novamente."
+        );
+      }
+    },
+    [navigation]
+  );
 
   return (
     <>
@@ -61,15 +112,14 @@ const SignUp: React.FC = () => {
                 name="name"
                 placeholder="Nome"
                 icon="user"
-                autoCorrect={false}
                 autoCapitalize="words"
-                keyboardType="default"
                 returnKeyType="next"
                 onSubmitEditing={() => {
-                  passwordInputRef.current?.focus();
+                  emailInputRef.current?.focus();
                 }}
               />
               <Input
+                ref={emailInputRef}
                 name="email"
                 placeholder="E-mail"
                 icon="mail"
@@ -87,9 +137,10 @@ const SignUp: React.FC = () => {
                 placeholder="Password"
                 icon="lock"
                 secureTextEntry
+                textContentType="newPassword"
                 returnKeyType="send"
                 onSubmitEditing={() => {
-                  console.log("Enviar");
+                  formRef.current?.submitForm();
                 }}
               />
             </Form>
